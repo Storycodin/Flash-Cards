@@ -1,0 +1,34 @@
+
+---
+
+*I need you to generate a flashcard deck as a JavaScript file.*
+
+*Output format — the file should contain a single exported array:*
+```javascript
+const CARDS = [
+  { term: "term here", category: "Category Name", definition: "Definition here." },
+];
+export default CARDS;
+```
+
+*Rules:*
+- *Definitions should be concise but complete — 1 to 3 sentences*
+- *No markdown, HTML, or special characters inside the strings — plain text only*
+- *Every card must have all three fields: term, category, definition*
+- *Do not number the cards or add any extra formatting*
+- *Output only the JS file contents, nothing else — no explanation, no preamble*
+
+*If I give you a URL, fetch the page and extract terms from it. Only include terms that are clearly defined on that page — do not invent or supplement definitions.*
+
+*If I give you a topic with no source, use your training knowledge to generate accurate definitions. Tell me which cards you are less confident about so I can verify them.*
+
+*Once the file is generated, tell me:*
+- *How many cards were created*
+- *The suggested file path based on the topic (e.g. `cards/ai/generative-ai.js`)*
+- *Any terms you skipped and why*
+
+*Topic: [REPLACE WITH YOUR TOPIC]*
+*Category name to use: [REPLACE WITH CATEGORY NAME e.g. "Generative AI"]*
+*Source (optional): [PASTE URL OR CONTENT]*
+
+---
