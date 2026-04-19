@@ -58,24 +58,64 @@ header .deck-label {
   font-weight: 400;
 }
 
-/* ── Category Selector ── */
+/* ── Deck Selector ── */
 .category-selector {
   width: 100%;
   max-width: 560px;
   margin-bottom: 20px;
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.deck-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.deck-btn {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--btn-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  align-self: flex-start;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.deck-btn:hover      { background: var(--btn-hover); border-color: #c0beba; }
+.deck-btn:active     { opacity: 0.75; }
+
+/* All categories in deck active */
+.deck-btn.active     { background: var(--accent); border-color: var(--accent); color: #ffffff; }
+
+/* Some (but not all) categories active */
+.deck-btn.partial    { border-color: var(--accent); color: var(--accent); background: var(--btn-bg); }
+
+.cat-group {
+  display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
+  padding-left: 10px;
 }
 
 .cat-btn {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 7px 14px;
-  border-radius: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
   border: 1px solid var(--border);
   background: var(--btn-bg);
   color: var(--text-secondary);
@@ -85,20 +125,9 @@ header .deck-label {
   user-select: none;
 }
 
-.cat-btn:hover {
-  background: var(--btn-hover);
-  border-color: #c0beba;
-}
-
-.cat-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #ffffff;
-}
-
-.cat-btn:active {
-  opacity: 0.75;
-}
+.cat-btn:hover   { background: var(--btn-hover); border-color: #c0beba; }
+.cat-btn:active  { opacity: 0.75; }
+.cat-btn.active  { background: var(--accent); border-color: var(--accent); color: #ffffff; }
 
 /* ── Progress ── */
 .progress-wrap {

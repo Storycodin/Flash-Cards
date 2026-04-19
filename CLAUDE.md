@@ -9,31 +9,48 @@ A flashcard web app with no build step, no frameworks, and no dependencies beyon
 ```
 index.html                        — App shell (HTML only, no inline CSS or JS)
 css/style.css                     — All styles
-js/app.js                         — All app logic + SOURCES registry
-cards/ai/ml-fundamentals.js       — ML Fundamentals deck
-cards/ai/generative-ai.js         — Generative AI deck
-cards/ai/metrics.js               — Metrics deck
-cards/ai/responsible-ai.js        — Responsible AI deck
-cards/Religion/viking-runes.js    — Viking Runes deck
+js/app.js                         — All app logic + DECKS registry
+decks/ai/ml-fundamentals.js       — Category: ML Fundamentals (part of AI deck)
+decks/ai/generative-ai.js         — Category: Generative AI (part of AI deck)
+decks/ai/metrics.js               — Category: Metrics (part of AI deck)
+decks/ai/responsible-ai.js        — Category: Responsible AI (part of AI deck)
+decks/Religion/viking-runes.js    — Category: Viking Runes (part of Religion deck)
 old/                              — Archived previous versions (do not edit)
 ```
 
-## Adding a new deck
+**Folder = deck. JS file = category within that deck.**
 
-1. Create `cards/<category>/<deck-name>.js` — export the card array as default:
+## Adding a new category to an existing deck
+
+1. Create `decks/<deck-folder>/<category-name>.js`:
    ```js
-   const MY_DECK = [
+   const MY_CATEGORY = [
      { term: "...", category: "...", definition: "..." }
    ];
-   export default MY_DECK;
+   export default MY_CATEGORY;
    ```
-2. In `js/app.js`, add one import and one entry to `SOURCES`:
+2. In `js/app.js`, add the import and one entry to the deck's `categories` array:
    ```js
-   import MY_DECK from '../cards/<category>/<deck-name>.js';
-   // then in SOURCES:
-   { id: 'my-deck', label: 'My Deck', cards: MY_DECK },
+   import MY_CATEGORY from '../decks/<deck-folder>/<category-name>.js';
+   // then inside the deck object in DECKS:
+   { id: 'my-category', label: 'My Category', cards: MY_CATEGORY },
    ```
-   That's the only file you need to touch.
+
+## Adding a new deck
+
+1. Create a new subfolder under `decks/` and add at least one category JS file
+2. In `js/app.js`, add the import and a new object to `DECKS`:
+   ```js
+   import MY_CARDS from '../decks/<new-folder>/<category>.js';
+   // then in DECKS:
+   {
+     id: 'my-deck',
+     label: 'My Deck',
+     categories: [
+       { id: 'my-category', label: 'My Category', cards: MY_CARDS },
+     ]
+   },
+   ```
 
 ## Card data format
 
