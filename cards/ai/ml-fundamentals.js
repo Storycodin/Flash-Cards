@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────
-// CARD DATA — ML Fundamentals (Google Glossary)
+// ML Fundamentals Cards
 // Source: developers.google.com/machine-learning/glossary/fundamentals
 // ─────────────────────────────────────────────
-window.CARDS = [
+const ML_FUNDAMENTALS = [
   {
     term: "accuracy",
     category: "fundamentals · metrics",
@@ -262,11 +262,6 @@ window.CARDS = [
     term: "iteration",
     category: "fundamentals · training",
     definition: "A single update of a model's parameters (weights and biases) during training. One iteration processes one batch of examples: forward pass to compute loss, then backward pass (backpropagation) to update parameters."
-  },
-  {
-    term: "L0 regularization",
-    category: "fundamentals · regularization",
-    definition: "A type of regularization that penalizes the total <em>count</em> of nonzero weights in a model. Generally impractical for large models because it turns training into a non-convex optimization problem."
   },
   {
     term: "L1 loss",
@@ -634,3 +629,5 @@ window.CARDS = [
     definition: "A normalization technique that replaces each feature value x with (x − μ) / σ, where μ is the feature mean and σ is its standard deviation. Results in a distribution with mean 0 and standard deviation 1. A form of scaling that handles outliers reasonably well."
   }
 ];
+
+export default ML_FUNDAMENTALS;

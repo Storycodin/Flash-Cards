@@ -3,122 +3,67 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Flash Cards</title>
+<title>ML Flashcards</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg: #f5f4f0;
-    --surface: #ffffff;
-    --border: #d8d6d0;
-    --text-primary: #111111;
-    --text-secondary: #666660;
-    --accent: #3d5afe;
-    --accent-light: #e8ecff;
-    --tag-bg: #eeecea;
-    --tag-text: #888880;
-    --btn-hover: #f0efeb;
-  }
-
-  body {
-    font-family: 'IBM Plex Sans', sans-serif;
-    background: var(--bg);
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 24px 16px 40px;
-    color: var(--text-primary);
-  }
-
-  header {
-    width: 100%;
-    max-width: 560px;
-    margin-bottom: 40px;
-  }
-
-  header h1 {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 4px;
-  }
-
-  header p {
-    font-size: 12px;
-    color: var(--text-secondary);
-  }
-
-  .deck-grid {
-    width: 100%;
-    max-width: 560px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .deck-card {
-    display: block;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px 24px;
-    text-decoration: none;
-    color: inherit;
-    transition: background 0.15s ease, transform 0.1s ease;
-  }
-
-  .deck-card:hover {
-    background: var(--btn-hover);
-    transform: translateY(-1px);
-  }
-
-  .deck-card .deck-name {
-    font-size: 16px;
-    font-weight: 600;
-    margin-bottom: 4px;
-  }
-
-  .deck-card .deck-meta {
-    font-size: 12px;
-    color: var(--text-secondary);
-  }
-
-  .deck-card .deck-tag {
-    display: inline-block;
-    margin-top: 10px;
-    font-size: 11px;
-    font-family: 'IBM Plex Mono', monospace;
-    background: var(--tag-bg);
-    color: var(--tag-text);
-    padding: 2px 8px;
-    border-radius: 4px;
-  }
-</style>
+<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 
 <header>
-  <h1>Flash Cards</h1>
-  <p>Pick a deck to study.</p>
+  <h1>ML Flashcards</h1>
+  <span class="deck-label" id="deck-label">Google ML Glossary</span>
 </header>
 
-<div class="deck-grid">
+<!-- Category selector — buttons injected by app.js -->
+<div class="category-selector" id="category-selector"></div>
 
-  <a class="deck-card" href="ml-flashcards.html">
-    <div class="deck-name">ML Fundamentals</div>
-    <div class="deck-meta">Core machine learning concepts and terminology</div>
-    <span class="deck-tag">ml fundamentals</span>
-  </a>
-
-  <!-- Add new decks here -->
-
+<div class="progress-wrap">
+  <div class="progress-meta">
+    <span class="progress-count" id="progress-count">1 / 1</span>
+    <span class="progress-count" id="progress-pct">0%</span>
+  </div>
+  <div class="progress-bar">
+    <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+  </div>
 </div>
 
+<div class="scene" id="scene" onclick="flipCard()">
+  <div class="card" id="card">
+    <div class="card-face card-front">
+      <span class="card-face-label">Term</span>
+      <div class="term" id="card-term"></div>
+      <span class="category-tag" id="card-category"></span>
+      <div class="tap-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M7 17L17 7M17 7H7M17 7v10"/>
+        </svg>
+        tap to flip
+      </div>
+    </div>
+    <div class="card-face card-back">
+      <span class="card-face-label">Definition</span>
+      <div class="definition" id="card-definition"></div>
+    </div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn btn-prev" id="btn-prev" onclick="navigate(-1)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M5 12l7-7M5 12l7 7"/></svg>
+    Prev
+  </button>
+
+  <button class="btn btn-shuffle" id="btn-shuffle" onclick="shuffle()" title="Shuffle deck">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+  </button>
+
+  <button class="btn btn-next" id="btn-next" onclick="navigate(1)">
+    Next
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
+  </button>
+</div>
+
+<script type="module" src="js/app.js"></script>
 </body>
 </html>
