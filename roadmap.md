@@ -3,15 +3,15 @@
 ## Phase Status
 - Phase 1 — ✅ Complete
 - Phase 2 — ✅ Complete
-- Phase 3 — Archive system
-- Phase 4 — Timer + related cards
+- Phase 3 — ✅ Complete
+- Phase 4 — Timer + related cards (timer done)
 - Phase 5 — Scoring system
 - Phase 6 — Google Sheets backend
 - Phase 7 — Mobile polish
 
 ---
 
-## Current State (Post Phase 2)
+## Current State (Post Phase 3)
 - 226 cards across 4 AI subcategories
 - Multi-file structure: `index.html`, `css/style.css`, `js/app.js`, `cards/ai/*.js`
 - Category toggle UI — mix or single category mode

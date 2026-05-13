@@ -90,6 +90,45 @@
 
 ---
 
+## Phase 3 — Complete ✅
+### Archive system + card timer
+
+**What was built:**
+- Archive button below the card — archives the current card with one click
+- Archived cards are removed from the active deck immediately; button shows "Restore"
+  when viewing an archived card
+- "Include in deck" checkbox — toggle archived cards back into the active deck
+- Expandable archived panel below the controls — lists all archived cards with their
+  category and a per-card Restore button
+- Archive state persists in `localStorage` under key `archived_cards` (array of term strings)
+- Timer on the card front — counts up from `0:00` while reading the term,
+  pauses when flipped to the definition, resumes on unflip, resets on every navigate/shuffle
+- Timer is small, monospace, top-right of the card — unobtrusive
+
+**Architecture decisions:**
+- Archive identified by `term` string (not a composite key) — simple and matches roadmap spec;
+  acceptable tradeoff since duplicate terms across decks are unlikely
+- Archive button placed *outside* the `.scene` click zone so clicking it does not
+  trigger a card flip — a layout constraint worth remembering for future card-level actions
+- `rebuildActiveCards(startIndex)` accepts an optional start index so archiving a card
+  jumps to the next one rather than resetting to card 1
+- Timer uses `setInterval` / `clearInterval`; pause = clear interval, resume = restart it;
+  no drift correction needed at this precision
+- `window.toggleArchive`, `window.toggleIncludeArchived`, `window.toggleShowArchived`
+  exposed for HTML `onclick` attributes, consistent with existing pattern
+
+**Lessons learned:**
+- Any button that acts on the current card must live *outside* the card scene element,
+  otherwise the click bubbles up and flips the card
+- Identify archived cards by a stable natural key (`term`) — avoids needing to add
+  IDs to every card object or change the card file format
+- Keep UI additions minimal: one button row + one collapsible panel adds the full
+  feature without touching the card layout or controls bar
+- `localStorage` keys to date: `archived_cards` — document these as they accumulate
+  so Phase 6 (Google Sheets migration) knows exactly what to sync
+
+---
+
 ## Standing Rules (apply to all future phases)
 
 - `CARDS` source arrays are never mutated at runtime
