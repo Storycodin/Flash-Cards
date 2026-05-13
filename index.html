@@ -32,6 +32,7 @@
   <div class="card" id="card">
     <div class="card-face card-front">
       <span class="card-face-label">Term</span>
+      <span class="card-timer" id="card-timer">0:00</span>
       <div class="term" id="card-term"></div>
       <span class="category-tag" id="card-category"></span>
       <div class="tap-hint">
@@ -48,6 +49,11 @@
   </div>
 </div>
 
+<!-- Archive button — outside scene so click doesn't trigger flipCard -->
+<div class="archive-row">
+  <button class="btn-archive" id="btn-archive" onclick="toggleArchive()">Archive</button>
+</div>
+
 <div class="controls">
   <button class="btn btn-prev" id="btn-prev" onclick="navigate(-1)">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M5 12l7-7M5 12l7 7"/></svg>
@@ -62,6 +68,20 @@
     Next
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
   </button>
+</div>
+
+<!-- Archived cards panel -->
+<div class="archived-section">
+  <div class="archived-header">
+    <button class="archived-toggle-btn" id="archived-toggle-btn" onclick="toggleShowArchived()">
+      Archived <span id="archived-count">0</span>
+    </button>
+    <label class="archived-include-label">
+      <input type="checkbox" id="include-archived" onchange="toggleIncludeArchived()">
+      Include in deck
+    </label>
+  </div>
+  <div class="archived-list hidden" id="archived-list"></div>
 </div>
 
 <script type="module" src="js/app.js"></script>

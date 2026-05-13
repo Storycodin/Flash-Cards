@@ -3,9 +3,6 @@
 // ─────────────────────────────────────────────
 
 // ── Deck Registry ─────────────────────────────
-// Folder = deck, JS file = category within that deck.
-// To add a new category: import it and add to the deck's categories array.
-// To add a new deck: add a new object to DECKS.
 import ML_FUNDAMENTALS from '../decks/ai/ml-fundamentals.js';
 import GENERATIVE_AI   from '../decks/ai/generative-ai.js';
 import METRICS         from '../decks/ai/metrics.js';
@@ -33,13 +30,149 @@ const DECKS = [
 ];
 
 // ── State ─────────────────────────────────────
-// Active keys are composite "deckId/categoryId" strings
 let activeKeys = new Set(
   DECKS.flatMap(d => d.categories.map(c => `${d.id}/${c.id}`))
 );
-let activeCards = [];
+let activeCards  = [];
 let currentIndex = 0;
 let isFlipped    = false;
+
+// ── Archive State ─────────────────────────────
+let archivedTerms    = new Set(JSON.parse(localStorage.getItem('archived_cards') || '[]'));
+let includeArchived  = false;
+let showArchivedPanel = false;
+
+function saveArchived() {
+  localStorage.setItem('archived_cards', JSON.stringify([...archivedTerms]));
+}
+
+function toggleArchive() {
+  if (activeCards.length === 0) return;
+  const term = activeCards[currentIndex].term;
+  if (archivedTerms.has(term)) {
+    archivedTerms.delete(term);
+  } else {
+    archivedTerms.add(term);
+  }
+  saveArchived();
+  updateArchivedCount();
+  buildArchivedPanel();
+  if (!includeArchived) {
+    // Remove card from deck; stay at same index position (next card slides in)
+    const savedIndex = Math.min(currentIndex, Math.max(0, activeCards.length - 2));
+    rebuildActiveCards(savedIndex);
+  } else {
+    updateArchiveBtn();
+  }
+}
+
+function restoreCard(term) {
+  archivedTerms.delete(term);
+  saveArchived();
+  updateArchivedCount();
+  buildArchivedPanel();
+  if (!includeArchived) rebuildActiveCards();
+  else updateArchiveBtn();
+}
+
+function toggleIncludeArchived() {
+  includeArchived = document.getElementById('include-archived').checked;
+  rebuildActiveCards();
+}
+
+function toggleShowArchived() {
+  showArchivedPanel = !showArchivedPanel;
+  document.getElementById('archived-list').classList.toggle('hidden', !showArchivedPanel);
+  document.getElementById('archived-toggle-btn').classList.toggle('open', showArchivedPanel);
+}
+
+function updateArchivedCount() {
+  document.getElementById('archived-count').textContent = archivedTerms.size;
+}
+
+function updateArchiveBtn() {
+  if (activeCards.length === 0) return;
+  const term = activeCards[currentIndex]?.term;
+  const btn  = document.getElementById('btn-archive');
+  if (!btn || term === undefined) return;
+  const isArch = archivedTerms.has(term);
+  btn.textContent = isArch ? 'Restore' : 'Archive';
+  btn.classList.toggle('archived', isArch);
+}
+
+function buildArchivedPanel() {
+  const list = document.getElementById('archived-list');
+  list.innerHTML = '';
+
+  if (archivedTerms.size === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'archived-empty';
+    empty.textContent = 'No archived cards.';
+    list.appendChild(empty);
+    return;
+  }
+
+  const allCards = DECKS.flatMap(d => d.categories.flatMap(c => c.cards));
+  archivedTerms.forEach(term => {
+    const card = allCards.find(c => c.term === term);
+    if (!card) return;
+
+    const row = document.createElement('div');
+    row.className = 'archived-item';
+
+    const termSpan = document.createElement('span');
+    termSpan.className = 'archived-term';
+    termSpan.textContent = card.term;
+
+    const catSpan = document.createElement('span');
+    catSpan.className = 'archived-cat';
+    catSpan.textContent = card.category;
+
+    const restoreBtn = document.createElement('button');
+    restoreBtn.className = 'btn-restore';
+    restoreBtn.textContent = 'Restore';
+    restoreBtn.addEventListener('click', () => restoreCard(card.term));
+
+    row.appendChild(termSpan);
+    row.appendChild(catSpan);
+    row.appendChild(restoreBtn);
+    list.appendChild(row);
+  });
+}
+
+// ── Timer ─────────────────────────────────────
+let timerInterval = null;
+let timerSeconds  = 0;
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timerSeconds = 0;
+  updateTimerDisplay();
+  timerInterval = setInterval(() => {
+    timerSeconds++;
+    updateTimerDisplay();
+  }, 1000);
+}
+
+function pauseTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+function resumeTimer() {
+  if (timerInterval) return;
+  timerInterval = setInterval(() => {
+    timerSeconds++;
+    updateTimerDisplay();
+  }, 1000);
+}
+
+function updateTimerDisplay() {
+  const m = Math.floor(timerSeconds / 60);
+  const s = timerSeconds % 60;
+  document.getElementById('card-timer').textContent =
+    `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 // ── Deck Selector ─────────────────────────────
 function buildDeckSelector() {
@@ -50,7 +183,6 @@ function buildDeckSelector() {
     const group = document.createElement('div');
     group.className = 'deck-group';
 
-    // Deck header button — toggles all categories in the deck
     const deckBtn = document.createElement('button');
     deckBtn.className = 'deck-btn';
     deckBtn.textContent = deck.label;
@@ -59,7 +191,6 @@ function buildDeckSelector() {
     deckBtn.addEventListener('click', () => toggleDeck(deck.id));
     group.appendChild(deckBtn);
 
-    // Category pills
     const catGroup = document.createElement('div');
     catGroup.className = 'cat-group';
     deck.categories.forEach(cat => {
@@ -90,7 +221,6 @@ function toggleDeck(deckId) {
   const allActive = keys.every(k => activeKeys.has(k));
 
   if (allActive) {
-    // Don't allow deactivating the last deck
     const otherActive = [...activeKeys].some(k => !k.startsWith(deckId + '/'));
     if (!otherActive) return;
     keys.forEach(k => activeKeys.delete(k));
@@ -103,7 +233,7 @@ function toggleDeck(deckId) {
 
 function toggleCategory(key) {
   if (activeKeys.has(key)) {
-    if (activeKeys.size === 1) return; // keep at least one active
+    if (activeKeys.size === 1) return;
     activeKeys.delete(key);
   } else {
     activeKeys.add(key);
@@ -113,13 +243,17 @@ function toggleCategory(key) {
 }
 
 // ── Card Management ───────────────────────────
-function rebuildActiveCards() {
-  activeCards = DECKS.flatMap(deck =>
+function rebuildActiveCards(startIndex = 0) {
+  let cards = DECKS.flatMap(deck =>
     deck.categories
       .filter(cat => activeKeys.has(`${deck.id}/${cat.id}`))
       .flatMap(cat => cat.cards)
   );
-  currentIndex = 0;
+  if (!includeArchived) {
+    cards = cards.filter(c => !archivedTerms.has(c.term));
+  }
+  activeCards  = cards;
+  currentIndex = Math.min(startIndex, Math.max(0, activeCards.length - 1));
   render(0);
 }
 
@@ -151,6 +285,9 @@ function render(slideDir) {
     void cardEl.offsetWidth;
     cardEl.classList.add(slideDir === 1 ? 'slide-right' : 'slide-left');
   }
+
+  startTimer();
+  updateArchiveBtn();
 }
 
 // ── Card Interactions ─────────────────────────
@@ -158,6 +295,8 @@ function flipCard() {
   const cardEl = document.getElementById('card');
   isFlipped = !isFlipped;
   cardEl.classList.toggle('flipped', isFlipped);
+  if (isFlipped) pauseTimer();
+  else           resumeTimer();
 }
 
 function navigate(dir) {
@@ -173,7 +312,7 @@ function shuffle() {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  activeCards = arr;
+  activeCards  = arr;
   currentIndex = 0;
 
   const cardEl = document.getElementById('card');
@@ -201,10 +340,15 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Expose to HTML onclick attributes
-window.flipCard = flipCard;
-window.navigate = navigate;
-window.shuffle  = shuffle;
+window.flipCard              = flipCard;
+window.navigate              = navigate;
+window.shuffle               = shuffle;
+window.toggleArchive         = toggleArchive;
+window.toggleIncludeArchived = toggleIncludeArchived;
+window.toggleShowArchived    = toggleShowArchived;
 
 // ── Init ──────────────────────────────────────
 buildDeckSelector();
+updateArchivedCount();
+buildArchivedPanel();
 rebuildActiveCards();

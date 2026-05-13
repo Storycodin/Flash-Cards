@@ -25,11 +25,11 @@
 /index.html
 /css/style.css
 /js/app.js
-/cards/ai/ml-fundamentals.js
-/cards/ai/generative-ai.js
-/cards/ai/metrics.js
-/cards/ai/responsible-ai.js
-/cards/[future-topic]/[future-deck].js
+/decks/ai/ml-fundamentals.js
+/decks/ai/generative-ai.js
+/decks/ai/metrics.js
+/decks/ai/responsible-ai.js
+/decks/[future-topic]/[future-deck].js
 ```
 
 ### Card object shape (current)
@@ -82,7 +82,7 @@
 - Starts when a new card is shown
 - Displays time elapsed since card was shown (e.g. "0:12")
 - Resets on every card navigation
-- Pauses when card is flipped (optional — decide during build)
+- Pauses when card is flipped
 - Display: small, unobtrusive, monospace font, top corner of card
 
 ### Related Cards
