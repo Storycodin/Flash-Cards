@@ -29,6 +29,19 @@ const DECKS = [
   },
 ];
 
+// Flat lookup: term -> { card, deckKey } — built once at load, used for related card lookups
+const CARD_LOOKUP = new Map();
+DECKS.forEach(deck => {
+  deck.categories.forEach(cat => {
+    const key = `${deck.id}/${cat.id}`;
+    cat.cards.forEach(card => {
+      if (!CARD_LOOKUP.has(card.term)) {
+        CARD_LOOKUP.set(card.term, { card, deckKey: key });
+      }
+    });
+  });
+});
+
 // ── State ─────────────────────────────────────
 let activeKeys = new Set(
   DECKS.flatMap(d => d.categories.map(c => `${d.id}/${c.id}`))
@@ -38,8 +51,8 @@ let currentIndex = 0;
 let isFlipped    = false;
 
 // ── Archive State ─────────────────────────────
-let archivedTerms    = new Set(JSON.parse(localStorage.getItem('archived_cards') || '[]'));
-let includeArchived  = false;
+let archivedTerms     = new Set(JSON.parse(localStorage.getItem('archived_cards') || '[]'));
+let includeArchived   = false;
 let showArchivedPanel = false;
 
 function saveArchived() {
@@ -58,7 +71,6 @@ function toggleArchive() {
   updateArchivedCount();
   buildArchivedPanel();
   if (!includeArchived) {
-    // Remove card from deck; stay at same index position (next card slides in)
     const savedIndex = Math.min(currentIndex, Math.max(0, activeCards.length - 2));
     rebuildActiveCards(savedIndex);
   } else {
@@ -174,6 +186,114 @@ function updateTimerDisplay() {
     `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+// ── Wikilinks ─────────────────────────────────
+function parseWikiLinks(text) {
+  const terms = [];
+  const re = /\[\[([^\]]+)\]\]/g;
+  let m;
+  while ((m = re.exec(text)) !== null) terms.push(m[1]);
+  return terms;
+}
+
+function stripWikiLinks(text) {
+  return text.replace(/\[\[([^\]]+)\]\]/g, '$1');
+}
+
+// ── Related Cards ─────────────────────────────
+function cardPriority({ deckKey, card }) {
+  const active   = activeKeys.has(deckKey);
+  const archived = archivedTerms.has(card.term);
+  if ( active && !archived) return 0;
+  if ( active &&  archived) return 1;
+  if (!active && !archived) return 2;
+  return 3;
+}
+
+function showRelatedCards() {
+  if (activeCards.length === 0) return;
+  const linkedTerms = parseWikiLinks(activeCards[currentIndex].definition);
+  const container   = document.getElementById('related-cards');
+
+  if (linkedTerms.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+
+  const related = linkedTerms
+    .map(term => CARD_LOOKUP.get(term))
+    .filter(Boolean)
+    .sort((a, b) => cardPriority(a) - cardPriority(b))
+    .slice(0, 5);
+
+  if (related.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+
+  container.innerHTML = '';
+
+  const label = document.createElement('p');
+  label.className = 'related-label';
+  label.textContent = 'Related';
+  container.appendChild(label);
+
+  const row = document.createElement('div');
+  row.className = 'related-row';
+
+  related.forEach(({ card }) => {
+    const tile = document.createElement('div');
+    tile.className = 'related-tile';
+
+    const termEl = document.createElement('div');
+    termEl.className = 'related-term';
+    termEl.textContent = card.term;
+
+    const catEl = document.createElement('span');
+    catEl.className = 'related-cat-tag';
+    catEl.textContent = card.category;
+
+    const btn = document.createElement('button');
+    btn.className = 'btn-add-next';
+    btn.textContent = 'Add as next';
+    btn.addEventListener('click', () => addAsNext(card, btn));
+
+    tile.appendChild(termEl);
+    tile.appendChild(catEl);
+    tile.appendChild(btn);
+    row.appendChild(tile);
+  });
+
+  container.appendChild(row);
+  container.classList.remove('hidden');
+}
+
+function hideRelatedCards() {
+  const container = document.getElementById('related-cards');
+  container.classList.add('hidden');
+  container.innerHTML = '';
+}
+
+function addAsNext(card, btn) {
+  const insertAt = currentIndex + 1;
+  if (activeCards[insertAt]?.term === card.term) {
+    btn.textContent = 'Already next';
+    btn.disabled = true;
+    return;
+  }
+  activeCards.splice(insertAt, 0, { ...card });
+  btn.textContent = 'Added';
+  btn.disabled = true;
+
+  // Update progress totals to reflect the new card
+  const total = activeCards.length;
+  const count = currentIndex + 1;
+  const pct   = Math.round((count / total) * 100);
+  document.getElementById('progress-count').textContent = `${count} / ${total}`;
+  document.getElementById('progress-pct').textContent   = `${pct}%`;
+  document.getElementById('progress-fill').style.width  = `${pct}%`;
+  document.getElementById('btn-next').disabled = false;
+}
+
 // ── Deck Selector ─────────────────────────────
 function buildDeckSelector() {
   const container = document.getElementById('category-selector');
@@ -264,7 +384,7 @@ function render(slideDir) {
 
   document.getElementById('card-term').textContent     = card.term;
   document.getElementById('card-category').textContent = card.category;
-  document.getElementById('card-definition').innerHTML = card.definition;
+  document.getElementById('card-definition').innerHTML = stripWikiLinks(card.definition);
 
   const count = currentIndex + 1;
   const total = activeCards.length;
@@ -286,6 +406,7 @@ function render(slideDir) {
     cardEl.classList.add(slideDir === 1 ? 'slide-right' : 'slide-left');
   }
 
+  hideRelatedCards();
   startTimer();
   updateArchiveBtn();
 }
@@ -295,8 +416,13 @@ function flipCard() {
   const cardEl = document.getElementById('card');
   isFlipped = !isFlipped;
   cardEl.classList.toggle('flipped', isFlipped);
-  if (isFlipped) pauseTimer();
-  else           resumeTimer();
+  if (isFlipped) {
+    pauseTimer();
+    showRelatedCards();
+  } else {
+    resumeTimer();
+    hideRelatedCards();
+  }
 }
 
 function navigate(dir) {
