@@ -69,30 +69,45 @@ old/                              — Archived previous versions (do not edit)
   Run `scripts/link-cards.js` to populate it automatically.
 - Inline `[[wikilinks]]` in definitions also create related card links (both sources are merged)
 
-## Linking cards (scripts/link-cards.js)
+## Linking cards — agent workflow
 
-Sends card definitions to Claude and writes back `linked_to` arrays.
+Use this when asked to "link the X deck" or "add related cards to X".
 
-**Setup (run once):**
+**Step 1 — prepare (run this first):**
 ```
-cd scripts
-npm install
+node scripts/prepare-links.js --decks ai
+node scripts/prepare-links.js --decks all
+node scripts/prepare-links.js --decks ai,religion --cross-deck
+node scripts/prepare-links.js          (lists available decks)
 ```
+No `--decks` arg → lists available decks and exits.
+Writes all card data to `scripts/.workspace/cards.json`.
 
-**Run:**
+**Step 2 — agent generates suggestions:**
+Read `scripts/.workspace/cards.json`. For each card apply the linking rules below
+and write `scripts/.workspace/suggestions.json` in this format:
+```json
+{ "Term A": ["Term B", "Term C"], "Term B": ["Term A"] }
 ```
-node link-cards.js
+Only use terms from the `allTerms` array in cards.json. No invented terms.
+
+**Step 3 — apply (run after writing suggestions.json):**
 ```
+node scripts/apply-links.js
+```
+Validates every suggested term exists, then writes `linked_to` fields to card files.
 
-Prompts for which decks to process and whether to allow cross-deck links.
-Requires `ANTHROPIC_API_KEY` environment variable.
-
-**Linking rules applied:**
-1. Definition mentions another card's term → link
+**Linking rules:**
+1. Definition directly mentions another card's term → link
 2. Subtype relationship → link both directions
 3. Contrast/confusion pairs (e.g. precision ↔ recall) → link both directions
-4. Conceptually inseparable cards → link
-5. Prerequisites → link child → parent (one direction)
+4. Conceptually inseparable or always taught together → link
+5. Prerequisite: understanding A requires knowing B → link A → B (one direction)
+
+**Setup (run once, needed for prepare/apply scripts):**
+```
+cd scripts && npm install
+```
 
 ## Conventions
 
