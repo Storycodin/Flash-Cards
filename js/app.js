@@ -199,6 +199,13 @@ function stripWikiLinks(text) {
   return text.replace(/\[\[([^\]]+)\]\]/g, '$1');
 }
 
+// Merge inline [[wikilinks]] with the linked_to field, deduplicated
+function getLinkedTerms(card) {
+  const fromDefinition = parseWikiLinks(card.definition);
+  const fromField      = card.linked_to || [];
+  return [...new Set([...fromDefinition, ...fromField])];
+}
+
 // ── Related Cards ─────────────────────────────
 function cardPriority({ deckKey, card }) {
   const active   = activeKeys.has(deckKey);
@@ -211,7 +218,7 @@ function cardPriority({ deckKey, card }) {
 
 function showRelatedCards() {
   if (activeCards.length === 0) return;
-  const linkedTerms = parseWikiLinks(activeCards[currentIndex].definition);
+  const linkedTerms = getLinkedTerms(activeCards[currentIndex]);
   const container   = document.getElementById('related-cards');
 
   if (linkedTerms.length === 0) {

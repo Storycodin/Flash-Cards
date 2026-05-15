@@ -58,12 +58,41 @@ old/                              — Archived previous versions (do not edit)
 {
   term: "the term",
   category: "deck · subtopic",
-  definition: "Definition text. Can include <strong>bold</strong> or <em>italic</em> HTML."
+  definition: "Definition text. Can include <strong>bold</strong> or <em>italic</em> HTML.",
+  linked_to: ["Related Term", "Another Term"]   // optional — added by scripts/link-cards.js
 }
 ```
 
 - No trailing comma on the last card
 - Cards are kept in alphabetical order by `term` for readability
+- `linked_to` is optional. When present the app shows related card previews on flip.
+  Run `scripts/link-cards.js` to populate it automatically.
+- Inline `[[wikilinks]]` in definitions also create related card links (both sources are merged)
+
+## Linking cards (scripts/link-cards.js)
+
+Sends card definitions to Claude and writes back `linked_to` arrays.
+
+**Setup (run once):**
+```
+cd scripts
+npm install
+```
+
+**Run:**
+```
+node link-cards.js
+```
+
+Prompts for which decks to process and whether to allow cross-deck links.
+Requires `ANTHROPIC_API_KEY` environment variable.
+
+**Linking rules applied:**
+1. Definition mentions another card's term → link
+2. Subtype relationship → link both directions
+3. Contrast/confusion pairs (e.g. precision ↔ recall) → link both directions
+4. Conceptually inseparable cards → link
+5. Prerequisites → link child → parent (one direction)
 
 ## Conventions
 
