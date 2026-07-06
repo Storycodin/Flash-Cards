@@ -4,7 +4,7 @@
 
 // ── Config ────────────────────────────────────
 // Paste your Apps Script deployment URL here after setup:
-const SCRIPT_URL = 'PASTE_YOUR_APPS_SCRIPT_URL_HERE';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyi4QXze7nfOx41vi-hOoaSN1eqJJF81dEifJwidGhNBmSEkguHhDvTnR4HrLCMYAaDzA/exec';
 
 // ── Deck Registry (built from Sheets on load) ─
 let DECKS = [];
