@@ -187,6 +187,14 @@ Shown after flipping any non-got-it card:
 
 ---
 
+## Bugs / UX Fixes To Address
+
+- **Back button should use history, not numeric order** — currently goes to the card before in index order; it should go back to the last card actually seen
+- **"How did you do" label missing** — the response buttons (Horrible / Ok / Getting it / Got it!) need a heading above them so the section is clearly labelled
+- **Show card weight on flip** — when a card flips, display its current weighted value so the user can see how the deck is prioritising it
+
+---
+
 ## Adding a New Card Deck
 
 1. Create a new JS file in the appropriate `/cards/` subfolder:

@@ -2,71 +2,57 @@
 // app.js — Flashcards
 // ─────────────────────────────────────────────
 
-// ── Deck Registry ─────────────────────────────
-import ML_FUNDAMENTALS from '../decks/ai/ml-fundamentals.js';
-import GENERATIVE_AI   from '../decks/ai/generative-ai.js';
-import METRICS         from '../decks/ai/metrics.js';
-import RESPONSIBLE_AI  from '../decks/ai/responsible-ai.js';
-import VIKING_RUNES    from '../decks/Religion/viking-runes.js';
+// ── Config ────────────────────────────────────
+// Paste your Apps Script deployment URL here after setup:
+const SCRIPT_URL = 'PASTE_YOUR_APPS_SCRIPT_URL_HERE';
 
-const DECKS = [
-  {
-    id: 'ai',
-    label: 'AI',
-    categories: [
-      { id: 'ml-fundamentals',  label: 'ML Fundamentals',  cards: ML_FUNDAMENTALS },
-      { id: 'generative-ai',    label: 'Generative AI',    cards: GENERATIVE_AI   },
-      { id: 'metrics',          label: 'Metrics',           cards: METRICS         },
-      { id: 'responsible-ai',   label: 'Responsible AI',   cards: RESPONSIBLE_AI  },
-    ]
-  },
-  {
-    id: 'religion',
-    label: 'Religion',
-    categories: [
-      { id: 'viking-runes',     label: 'Viking Runes',     cards: VIKING_RUNES    },
-    ]
-  },
-];
+// ── Deck Registry (built from Sheets on load) ─
+let DECKS = [];
 
-// Flat lookup: term -> { card, deckKey } — built once at load, used for related card lookups
 const CARD_LOOKUP = new Map();
-DECKS.forEach(deck => {
-  deck.categories.forEach(cat => {
-    const key = `${deck.id}/${cat.id}`;
-    cat.cards.forEach(card => {
-      if (!CARD_LOOKUP.has(card.term)) {
-        CARD_LOOKUP.set(card.term, { card, deckKey: key });
-      }
+
+function buildCardLookup() {
+  CARD_LOOKUP.clear();
+  DECKS.forEach(deck => {
+    deck.categories.forEach(cat => {
+      const key = `${deck.id}/${cat.id}`;
+      cat.cards.forEach(card => {
+        if (!CARD_LOOKUP.has(card.term)) {
+          CARD_LOOKUP.set(card.term, { card, deckKey: key });
+        }
+      });
     });
   });
-});
+}
 
 // ── State ─────────────────────────────────────
-let activeKeys = new Set(
-  DECKS.flatMap(d => d.categories.map(c => `${d.id}/${c.id}`))
-);
+let activeKeys   = new Set();
 let activeCards  = [];
 let currentIndex = 0;
 let isFlipped    = false;
 
-// ── Archive State ─────────────────────────────
-let archivedTerms     = new Set(JSON.parse(localStorage.getItem('archived_cards') || '[]'));
+// ── Archive & Got It State ────────────────────
+let archivedTerms     = new Set();
+let gotItTerms        = new Set();
 let includeArchived   = false;
 let showArchivedPanel = false;
 
-// ── Weighted Pool State ───────────────────────
-let wrongCounts     = new Map(
-  Object.entries(JSON.parse(localStorage.getItem('wrong_counts') || '{}'))
-    .map(([k, v]) => [k, Number(v)])
-);
-let seenThisSession = new Set();
-let recentlySeen    = [];        // last 10 terms seen, for connection bonus
-let addedQueue      = new Set(); // terms manually queued via addAsNext
-let judgedThisCard  = false;
+function syncCard(term, updates) {
+  if (!SCRIPT_URL || SCRIPT_URL.includes('PASTE')) return;
 
-function saveArchived() {
-  localStorage.setItem('archived_cards', JSON.stringify([...archivedTerms]));
+  // Update local cache immediately so offline reloads preserve progress
+  try {
+    const cache = JSON.parse(localStorage.getItem('sheets_cache') || '[]');
+    const row   = cache.find(r => String(r.term).trim() === String(term).trim());
+    if (row) Object.assign(row, updates);
+    localStorage.setItem('sheets_cache', JSON.stringify(cache));
+  } catch {}
+
+  // Fire-and-forget to Sheets
+  fetch(SCRIPT_URL, {
+    method: 'POST',
+    body: JSON.stringify({ term, ...updates }),
+  }).catch(() => {});
 }
 
 function toggleArchive() {
@@ -74,10 +60,11 @@ function toggleArchive() {
   const term = activeCards[currentIndex].term;
   if (archivedTerms.has(term)) {
     archivedTerms.delete(term);
+    syncCard(term, { archived: false });
   } else {
     archivedTerms.add(term);
+    syncCard(term, { archived: true });
   }
-  saveArchived();
   updateArchivedCount();
   buildArchivedPanel();
   if (!includeArchived) {
@@ -88,9 +75,14 @@ function toggleArchive() {
   }
 }
 
-function restoreCard(term) {
-  archivedTerms.delete(term);
-  saveArchived();
+function restoreCard(term, type) {
+  if (type === 'got_it') {
+    gotItTerms.delete(term);
+    syncCard(term, { got_it: false, weight: 0 });
+  } else {
+    archivedTerms.delete(term);
+    syncCard(term, { archived: false });
+  }
   updateArchivedCount();
   buildArchivedPanel();
   if (!includeArchived) rebuildActiveCards();
@@ -109,7 +101,7 @@ function toggleShowArchived() {
 }
 
 function updateArchivedCount() {
-  document.getElementById('archived-count').textContent = archivedTerms.size;
+  document.getElementById('archived-count').textContent = archivedTerms.size + gotItTerms.size;
 }
 
 function updateArchiveBtn() {
@@ -126,7 +118,13 @@ function buildArchivedPanel() {
   const list = document.getElementById('archived-list');
   list.innerHTML = '';
 
-  if (archivedTerms.size === 0) {
+  const allCards = DECKS.flatMap(d => d.categories.flatMap(c => c.cards));
+  const entries  = [
+    ...[...gotItTerms].map(t  => ({ term: t, type: 'got_it'   })),
+    ...[...archivedTerms].map(t => ({ term: t, type: 'archived' })),
+  ];
+
+  if (entries.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'archived-empty';
     empty.textContent = 'No archived cards.';
@@ -134,8 +132,7 @@ function buildArchivedPanel() {
     return;
   }
 
-  const allCards = DECKS.flatMap(d => d.categories.flatMap(c => c.cards));
-  archivedTerms.forEach(term => {
+  entries.forEach(({ term, type }) => {
     const card = allCards.find(c => c.term === term);
     if (!card) return;
 
@@ -148,12 +145,12 @@ function buildArchivedPanel() {
 
     const catSpan = document.createElement('span');
     catSpan.className = 'archived-cat';
-    catSpan.textContent = card.category;
+    catSpan.textContent = type === 'got_it' ? '✓ Mastered' : card.category;
 
     const restoreBtn = document.createElement('button');
     restoreBtn.className = 'btn-restore';
-    restoreBtn.textContent = 'Restore';
-    restoreBtn.addEventListener('click', () => restoreCard(card.term));
+    restoreBtn.textContent = type === 'got_it' ? 'Un-master' : 'Restore';
+    restoreBtn.addEventListener('click', () => restoreCard(card.term, type));
 
     row.appendChild(termSpan);
     row.appendChild(catSpan);
@@ -162,47 +159,15 @@ function buildArchivedPanel() {
   });
 }
 
-// ── Timer ─────────────────────────────────────
-let timerInterval = null;
-let timerSeconds  = 0;
+// ── Weighted Pool State ───────────────────────
+let cardWeights     = new Map(); // term → accumulated weight delta
+let seenThisSession = new Set();
+let recentlySeen    = [];        // last 10 terms, for connection bonus
+let addedQueue      = new Set(); // terms manually queued via addAsNext
+let judgedThisCard  = false;
 
-function startTimer() {
-  clearInterval(timerInterval);
-  timerSeconds = 0;
-  updateTimerDisplay();
-  timerInterval = setInterval(() => {
-    timerSeconds++;
-    updateTimerDisplay();
-  }, 1000);
-}
-
-function pauseTimer() {
-  clearInterval(timerInterval);
-  timerInterval = null;
-}
-
-function resumeTimer() {
-  if (timerInterval) return;
-  timerInterval = setInterval(() => {
-    timerSeconds++;
-    updateTimerDisplay();
-  }, 1000);
-}
-
-function updateTimerDisplay() {
-  const m = Math.floor(timerSeconds / 60);
-  const s = timerSeconds % 60;
-  document.getElementById('card-timer').textContent =
-    `${m}:${s.toString().padStart(2, '0')}`;
-}
-
-// ── Judgment & Weighted Pool ──────────────────
 const JUDGMENT_LEVELS = ['horrible', 'ok', 'gettingit', 'gotit'];
 const JUDGMENT_DELTA  = { horrible: 4, ok: 2, gettingit: 1 };
-
-function saveWrongCounts() {
-  localStorage.setItem('wrong_counts', JSON.stringify(Object.fromEntries(wrongCounts)));
-}
 
 function judgeCard(level) {
   if (judgedThisCard || activeCards.length === 0) return;
@@ -212,14 +177,17 @@ function judgeCard(level) {
   const term = activeCards[currentIndex].term;
 
   if (level === 'gotit') {
-    // Archive the card and auto-advance
-    archivedTerms.add(term);
-    saveArchived();
+    gotItTerms.add(term);
+    syncCard(term, { got_it: true, weight: 0 });
     updateArchivedCount();
     buildArchivedPanel();
     updateArchiveBtn();
     recentlySeen.unshift(term);
     if (recentlySeen.length > 10) recentlySeen.pop();
+    // Remove from active deck and auto-advance
+    activeCards.splice(currentIndex, 1);
+    if (activeCards.length === 0) { judgedThisCard = false; render(0); return; }
+    if (currentIndex >= activeCards.length) currentIndex = 0;
     judgedThisCard = false;
     currentIndex = weightedPickIndex();
     render(1);
@@ -228,17 +196,18 @@ function judgeCard(level) {
 
   const delta = JUDGMENT_DELTA[level] || 0;
   if (delta > 0) {
-    wrongCounts.set(term, (wrongCounts.get(term) || 0) + delta);
-    saveWrongCounts();
+    const newWeight = (cardWeights.get(term) || 0) + delta;
+    cardWeights.set(term, newWeight);
+    syncCard(term, { weight: newWeight });
   }
 }
 
 function updateJudgmentBtns(level) {
-  JUDGMENT_LEVELS.forEach(l => {
+  JUDGMENT_LEVELS.forEach(l =>
     document.getElementById(`btn-${l}`)?.classList.add(
       l === level ? `judged-${l}` : 'judged-other'
-    );
-  });
+    )
+  );
 }
 
 function showJudgmentBtns() {
@@ -260,14 +229,14 @@ function weightedPickIndex() {
     .map((card, i) => ({ card, i }))
     .filter(({ card, i }) =>
       i !== currentIndex &&
-      (!archivedTerms.has(card.term) || includeArchived)
+      !archivedTerms.has(card.term) &&
+      !gotItTerms.has(card.term)
     );
 
   if (candidates.length === 0) return currentIndex;
 
   const weights = candidates.map(({ card }) => {
-    let w = 1.0;
-    w += (wrongCounts.get(card.term) || 0) * 3;
+    let w = 1.0 + (cardWeights.get(card.term) || 0);
     const linked = getLinkedTerms(card);
     w += linked.filter(t => recentSet.has(t)).length * 2;
     if (seenThisSession.has(card.term)) w *= 0.2;
@@ -283,6 +252,33 @@ function weightedPickIndex() {
   return candidates[candidates.length - 1].i;
 }
 
+// ── Timer ─────────────────────────────────────
+let timerInterval = null;
+let timerSeconds  = 0;
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timerSeconds = 0;
+  updateTimerDisplay();
+  timerInterval = setInterval(() => { timerSeconds++; updateTimerDisplay(); }, 1000);
+}
+
+function pauseTimer() {
+  clearInterval(timerInterval);
+  timerInterval = null;
+}
+
+function resumeTimer() {
+  if (timerInterval) return;
+  timerInterval = setInterval(() => { timerSeconds++; updateTimerDisplay(); }, 1000);
+}
+
+function updateTimerDisplay() {
+  const m = Math.floor(timerSeconds / 60);
+  const s = timerSeconds % 60;
+  document.getElementById('card-timer').textContent = `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 // ── Wikilinks ─────────────────────────────────
 function parseWikiLinks(text) {
   const terms = [];
@@ -296,9 +292,8 @@ function stripWikiLinks(text) {
   return text.replace(/\[\[([^\]]+)\]\]/g, '$1');
 }
 
-// Merge inline [[wikilinks]] with the linked_to field, deduplicated
 function getLinkedTerms(card) {
-  const fromDefinition = parseWikiLinks(card.definition);
+  const fromDefinition = parseWikiLinks(card.definition || '');
   const fromField      = card.linked_to || [];
   return [...new Set([...fromDefinition, ...fromField])];
 }
@@ -306,7 +301,7 @@ function getLinkedTerms(card) {
 // ── Related Cards ─────────────────────────────
 function cardPriority({ deckKey, card }) {
   const active   = activeKeys.has(deckKey);
-  const archived = archivedTerms.has(card.term);
+  const archived = archivedTerms.has(card.term) || gotItTerms.has(card.term);
   if ( active && !archived) return 0;
   if ( active &&  archived) return 1;
   if (!active && !archived) return 2;
@@ -318,10 +313,7 @@ function showRelatedCards() {
   const linkedTerms = getLinkedTerms(activeCards[currentIndex]);
   const container   = document.getElementById('related-cards');
 
-  if (linkedTerms.length === 0) {
-    container.classList.add('hidden');
-    return;
-  }
+  if (linkedTerms.length === 0) { container.classList.add('hidden'); return; }
 
   const related = linkedTerms
     .map(term => CARD_LOOKUP.get(term))
@@ -329,10 +321,7 @@ function showRelatedCards() {
     .sort((a, b) => cardPriority(a) - cardPriority(b))
     .slice(0, 5);
 
-  if (related.length === 0) {
-    container.classList.add('hidden');
-    return;
-  }
+  if (related.length === 0) { container.classList.add('hidden'); return; }
 
   container.innerHTML = '';
 
@@ -380,16 +369,12 @@ function hideRelatedCards() {
 function addAsNext(card, btn) {
   const insertAt = currentIndex + 1;
   if (activeCards[insertAt]?.term === card.term) {
-    btn.textContent = 'Already next';
-    btn.disabled = true;
-    return;
+    btn.textContent = 'Already next'; btn.disabled = true; return;
   }
   activeCards.splice(insertAt, 0, { ...card });
   addedQueue.add(card.term);
-  btn.textContent = 'Added';
-  btn.disabled = true;
+  btn.textContent = 'Added'; btn.disabled = true;
 
-  // Update progress totals to reflect the new card
   const total = activeCards.length;
   const count = currentIndex + 1;
   const pct   = Math.round((count / total) * 100);
@@ -444,7 +429,6 @@ function toggleDeck(deckId) {
   const deck = DECKS.find(d => d.id === deckId);
   const keys = deck.categories.map(c => `${deckId}/${c.id}`);
   const allActive = keys.every(k => activeKeys.has(k));
-
   if (allActive) {
     const otherActive = [...activeKeys].some(k => !k.startsWith(deckId + '/'));
     if (!otherActive) return;
@@ -465,22 +449,6 @@ function toggleCategory(key) {
   }
   buildDeckSelector();
   rebuildActiveCards();
-}
-
-// ── Card Management ───────────────────────────
-function rebuildActiveCards(startIndex = 0) {
-  addedQueue.clear();
-  let cards = DECKS.flatMap(deck =>
-    deck.categories
-      .filter(cat => activeKeys.has(`${deck.id}/${cat.id}`))
-      .flatMap(cat => cat.cards)
-  );
-  if (!includeArchived) {
-    cards = cards.filter(c => !archivedTerms.has(c.term));
-  }
-  activeCards  = cards;
-  currentIndex = Math.min(startIndex, Math.max(0, activeCards.length - 1));
-  render(0);
 }
 
 // ── Render ────────────────────────────────────
@@ -504,11 +472,8 @@ function render(slideDir) {
   document.getElementById('progress-fill').style.width  = `${pct}%`;
 
   document.getElementById('btn-prev').disabled = currentIndex === 0;
-  // In pool mode next is always available (pool picks from whole deck); only disable if ≤1 card
   document.getElementById('btn-next').disabled =
-    addedQueue.size > 0
-      ? currentIndex === activeCards.length - 1
-      : activeCards.length <= 1;
+    addedQueue.size > 0 ? currentIndex === activeCards.length - 1 : activeCards.length <= 1;
 
   const cardEl = document.getElementById('card');
   cardEl.classList.remove('flipped');
@@ -551,7 +516,6 @@ function navigate(dir) {
     return;
   }
 
-  // Forward: drain manually-queued cards first, then weighted pool
   recentlySeen.unshift(activeCards[currentIndex].term);
   if (recentlySeen.length > 10) recentlySeen.pop();
 
@@ -586,23 +550,32 @@ function shuffle() {
   render(0);
 }
 
-// ── Keyboard Navigation ───────────────────────
+function rebuildActiveCards(startIndex = 0) {
+  addedQueue.clear();
+  let cards = DECKS.flatMap(deck =>
+    deck.categories
+      .filter(cat => activeKeys.has(`${deck.id}/${cat.id}`))
+      .flatMap(cat => cat.cards)
+  );
+  if (!includeArchived) {
+    cards = cards.filter(c => !archivedTerms.has(c.term) && !gotItTerms.has(c.term));
+  }
+  activeCards  = cards;
+  currentIndex = Math.min(startIndex, Math.max(0, activeCards.length - 1));
+  render(0);
+}
+
+// ── Keyboard ──────────────────────────────────
 document.addEventListener('keydown', (e) => {
   switch (e.key) {
     case 'ArrowRight': navigate(1);  break;
     case 'ArrowLeft':  navigate(-1); break;
-    case ' ':
-    case 'f':
-      e.preventDefault();
-      flipCard();
-      break;
-    case 's':
-      shuffle();
-      break;
+    case ' ': case 'f': e.preventDefault(); flipCard(); break;
+    case 's': shuffle(); break;
   }
 });
 
-// Expose to HTML onclick attributes
+// ── Expose to HTML onclick attributes ─────────
 window.flipCard              = flipCard;
 window.navigate              = navigate;
 window.shuffle               = shuffle;
@@ -611,8 +584,115 @@ window.toggleIncludeArchived = toggleIncludeArchived;
 window.toggleShowArchived    = toggleShowArchived;
 window.judgeCard             = judgeCard;
 
+// ── Data Loading ──────────────────────────────
+function buildDecksFromRows(rows) {
+  const deckMap = new Map();
+
+  for (const row of rows) {
+    const deckName = String(row.deck     || 'Unknown').trim();
+    const catName  = String(row.category || 'General').trim();
+    const term     = String(row.term     || '').trim();
+    if (!term) continue;
+
+    if (!deckMap.has(deckName)) deckMap.set(deckName, new Map());
+    const catMap = deckMap.get(deckName);
+    if (!catMap.has(catName)) catMap.set(catName, []);
+
+    const linked_to = row.linked_to
+      ? String(row.linked_to).split(',').map(t => t.trim()).filter(Boolean)
+      : [];
+
+    catMap.get(catName).push({
+      term,
+      category:   catName,
+      definition: String(row.definition || '').trim(),
+      linked_to,
+    });
+  }
+
+  const decks = [];
+  deckMap.forEach((catMap, deckName) => {
+    const categories = [];
+    catMap.forEach((cards, catName) => {
+      const id = catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      categories.push({ id, label: catName, cards });
+    });
+    const deckId = deckName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    decks.push({ id: deckId, label: deckName, categories });
+  });
+
+  return decks;
+}
+
+function loadProgressFromRows(rows) {
+  const weights  = new Map();
+  const archived = new Set();
+  const gotIt    = new Set();
+
+  for (const row of rows) {
+    const term = String(row.term || '').trim();
+    if (!term) continue;
+
+    const w = Number(row.weight) || 0;
+    if (w > 0) weights.set(term, w);
+
+    if (row.archived === true || String(row.archived).toUpperCase() === 'TRUE') archived.add(term);
+    if (row.got_it   === true || String(row.got_it  ).toUpperCase() === 'TRUE') gotIt.add(term);
+  }
+
+  return { weights, archived, gotIt };
+}
+
 // ── Init ──────────────────────────────────────
-buildDeckSelector();
-updateArchivedCount();
-buildArchivedPanel();
-rebuildActiveCards();
+async function init() {
+  document.getElementById('loading-overlay')?.classList.remove('hidden');
+
+  let rows = null;
+
+  if (SCRIPT_URL && !SCRIPT_URL.includes('PASTE')) {
+    try {
+      const res = await fetch(SCRIPT_URL);
+      rows = await res.json();
+      localStorage.setItem('sheets_cache', JSON.stringify(rows));
+    } catch {}
+  }
+
+  if (!rows) {
+    try {
+      const cached = localStorage.getItem('sheets_cache');
+      if (cached) rows = JSON.parse(cached);
+    } catch {}
+  }
+
+  if (!rows || rows.length === 0) {
+    const el = document.getElementById('load-error');
+    if (el) {
+      el.textContent = SCRIPT_URL.includes('PASTE')
+        ? 'Set your Apps Script URL in js/app.js (the SCRIPT_URL constant at the top).'
+        : 'Could not load cards. Check your connection — using cached data if available.';
+      el.classList.remove('hidden');
+    }
+    document.getElementById('loading-spinner')?.classList.add('hidden');
+    return;
+  }
+
+  DECKS = buildDecksFromRows(rows);
+  buildCardLookup();
+
+  const progress = loadProgressFromRows(rows);
+  cardWeights   = progress.weights;
+  archivedTerms = progress.archived;
+  gotItTerms    = progress.gotIt;
+
+  activeKeys = new Set(
+    DECKS.flatMap(d => d.categories.map(c => `${d.id}/${c.id}`))
+  );
+
+  document.getElementById('loading-overlay')?.classList.add('hidden');
+  buildDeckSelector();
+  updateArchivedCount();
+  buildArchivedPanel();
+  rebuildActiveCards();
+}
+
+init();
