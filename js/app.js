@@ -67,6 +67,7 @@ function toggleArchive() {
   }
   updateArchivedCount();
   buildArchivedPanel();
+  updateCategoryTrackers();
   if (!includeArchived) {
     const savedIndex = Math.min(currentIndex, Math.max(0, activeCards.length - 2));
     rebuildActiveCards(savedIndex);
@@ -85,6 +86,7 @@ function restoreCard(term, type) {
   }
   updateArchivedCount();
   buildArchivedPanel();
+  updateCategoryTrackers();
   if (!includeArchived) rebuildActiveCards();
   else updateArchiveBtn();
 }
@@ -110,7 +112,7 @@ function updateArchiveBtn() {
   const btn  = document.getElementById('btn-archive');
   if (!btn || term === undefined) return;
   const isArch = archivedTerms.has(term);
-  btn.textContent = isArch ? 'Restore' : 'Archive';
+  btn.textContent = isArch ? 'Remove from Tome' : 'Add to Tome';
   btn.classList.toggle('archived', isArch);
 }
 
@@ -127,7 +129,7 @@ function buildArchivedPanel() {
   if (entries.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'archived-empty';
-    empty.textContent = 'No archived cards.';
+    empty.textContent = 'Your Tome of Knowledge is empty.';
     list.appendChild(empty);
     return;
   }
@@ -149,7 +151,7 @@ function buildArchivedPanel() {
 
     const restoreBtn = document.createElement('button');
     restoreBtn.className = 'btn-restore';
-    restoreBtn.textContent = type === 'got_it' ? 'Un-master' : 'Restore';
+    restoreBtn.textContent = type === 'got_it' ? 'Un-master' : 'Remove from Tome';
     restoreBtn.addEventListener('click', () => restoreCard(card.term, type));
 
     row.appendChild(termSpan);
@@ -164,6 +166,7 @@ let cardWeights     = new Map(); // term → accumulated weight delta
 let seenThisSession = new Set();
 let recentlySeen    = [];        // last 10 terms, for connection bonus
 let addedQueue      = new Set(); // terms manually queued via addAsNext
+let viewHistory     = [];        // stack of previously viewed terms for back navigation
 let judgedThisCard  = false;
 
 const JUDGMENT_LEVELS = ['horrible', 'ok', 'gettingit', 'gotit'];
@@ -177,11 +180,14 @@ function judgeCard(level) {
   const term = activeCards[currentIndex].term;
 
   if (level === 'gotit') {
+    addedQueue.clear(); // reset queue so Next works cleanly after auto-advance
+    viewHistory.push(term); // allow Back to return to this card if needed
     gotItTerms.add(term);
     syncCard(term, { got_it: true, weight: 0 });
     updateArchivedCount();
     buildArchivedPanel();
     updateArchiveBtn();
+    updateCategoryTrackers();
     recentlySeen.unshift(term);
     if (recentlySeen.length > 10) recentlySeen.pop();
     // Remove from active deck and auto-advance
@@ -211,6 +217,10 @@ function updateJudgmentBtns(level) {
 }
 
 function showJudgmentBtns() {
+  // Always reset button states before showing so stale selections don't carry over
+  JUDGMENT_LEVELS.forEach(l =>
+    document.getElementById(`btn-${l}`)?.classList.remove(`judged-${l}`, 'judged-other')
+  );
   document.getElementById('judgment-row')?.classList.remove('hidden');
 }
 
@@ -250,6 +260,42 @@ function weightedPickIndex() {
     if (rand <= 0) return candidates[k].i;
   }
   return candidates[candidates.length - 1].i;
+}
+
+// ── Progress & Trackers ───────────────────────
+function updateProgress() {
+  const uniqueTerms = new Set(activeCards.map(c => c.term));
+  const total = uniqueTerms.size;
+  const done  = [...uniqueTerms].filter(t => seenThisSession.has(t)).length;
+  const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+  document.getElementById('progress-count').textContent = `${done} / ${total}`;
+  document.getElementById('progress-pct').textContent   = `${pct}%`;
+  document.getElementById('progress-fill').style.width  = `${pct}%`;
+}
+
+function updateCategoryTrackers() {
+  DECKS.forEach(deck => {
+    deck.categories.forEach(cat => {
+      const key = `${deck.id}/${cat.id}`;
+      const btn = document.querySelector(`.cat-btn[data-key="${key}"]`);
+      if (!btn) return;
+
+      const total  = cat.cards.length;
+      const active = cat.cards.filter(c => !archivedTerms.has(c.term) && !gotItTerms.has(c.term)).length;
+      const wasComplete = btn.classList.contains('cat-complete');
+      const isComplete  = total > 0 && active === 0;
+
+      const countEl = btn.querySelector('.cat-count');
+      if (countEl) countEl.textContent = `${active}/${total}`;
+
+      if (isComplete && !wasComplete) {
+        btn.classList.add('cat-complete', 'cat-complete-anim');
+        setTimeout(() => btn.classList.remove('cat-complete-anim'), 800);
+      } else if (!isComplete) {
+        btn.classList.remove('cat-complete');
+      }
+    });
+  });
 }
 
 // ── Timer ─────────────────────────────────────
@@ -374,13 +420,7 @@ function addAsNext(card, btn) {
   activeCards.splice(insertAt, 0, { ...card });
   addedQueue.add(card.term);
   btn.textContent = 'Added'; btn.disabled = true;
-
-  const total = activeCards.length;
-  const count = currentIndex + 1;
-  const pct   = Math.round((count / total) * 100);
-  document.getElementById('progress-count').textContent = `${count} / ${total}`;
-  document.getElementById('progress-pct').textContent   = `${pct}%`;
-  document.getElementById('progress-fill').style.width  = `${pct}%`;
+  updateProgress();
   document.getElementById('btn-next').disabled = false;
 }
 
@@ -404,11 +444,15 @@ function buildDeckSelector() {
     const catGroup = document.createElement('div');
     catGroup.className = 'cat-group';
     deck.categories.forEach(cat => {
-      const key = `${deck.id}/${cat.id}`;
+      const key    = `${deck.id}/${cat.id}`;
+      const total  = cat.cards.length;
+      const active = cat.cards.filter(c => !archivedTerms.has(c.term) && !gotItTerms.has(c.term)).length;
       const catBtn = document.createElement('button');
-      catBtn.className = 'cat-btn' + (activeKeys.has(key) ? ' active' : '');
-      catBtn.textContent = cat.label;
+      catBtn.className = 'cat-btn'
+        + (activeKeys.has(key)             ? ' active'       : '')
+        + (total > 0 && active === 0       ? ' cat-complete' : '');
       catBtn.dataset.key = key;
+      catBtn.innerHTML = `${cat.label}<span class="cat-count">${active}/${total}</span>`;
       catBtn.addEventListener('click', () => toggleCategory(key));
       catGroup.appendChild(catBtn);
     });
@@ -464,14 +508,9 @@ function render(slideDir) {
   document.getElementById('card-category').textContent = card.category;
   document.getElementById('card-definition').innerHTML = stripWikiLinks(card.definition);
 
-  const count = currentIndex + 1;
-  const total = activeCards.length;
-  const pct   = Math.round((count / total) * 100);
-  document.getElementById('progress-count').textContent = `${count} / ${total}`;
-  document.getElementById('progress-pct').textContent   = `${pct}%`;
-  document.getElementById('progress-fill').style.width  = `${pct}%`;
+  updateProgress();
 
-  document.getElementById('btn-prev').disabled = currentIndex === 0;
+  document.getElementById('btn-prev').disabled = viewHistory.length === 0;
   document.getElementById('btn-next').disabled =
     addedQueue.size > 0 ? currentIndex === activeCards.length - 1 : activeCards.length <= 1;
 
@@ -508,12 +547,19 @@ function flipCard() {
 
 function navigate(dir) {
   if (dir === -1) {
-    if (currentIndex <= 0) return;
-    recentlySeen.unshift(activeCards[currentIndex].term);
-    if (recentlySeen.length > 10) recentlySeen.pop();
-    currentIndex--;
-    render(dir);
-    return;
+    // Go back through view history, skipping any removed cards
+    while (viewHistory.length > 0) {
+      const prevTerm = viewHistory.pop();
+      const idx = activeCards.findIndex(c => c.term === prevTerm);
+      if (idx !== -1) { currentIndex = idx; render(-1); return; }
+    }
+    return; // nothing in history
+  }
+
+  // Push current card to history before moving forward
+  if (activeCards[currentIndex]) {
+    viewHistory.push(activeCards[currentIndex].term);
+    if (viewHistory.length > 50) viewHistory.shift();
   }
 
   recentlySeen.unshift(activeCards[currentIndex].term);
@@ -534,6 +580,7 @@ function navigate(dir) {
 
 function shuffle() {
   addedQueue.clear();
+  viewHistory.length = 0;
   const arr = [...activeCards];
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -552,6 +599,7 @@ function shuffle() {
 
 function rebuildActiveCards(startIndex = 0) {
   addedQueue.clear();
+  viewHistory.length = 0;
   let cards = DECKS.flatMap(deck =>
     deck.categories
       .filter(cat => activeKeys.has(`${deck.id}/${cat.id}`))

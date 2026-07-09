@@ -2,25 +2,70 @@
 
 ## Project overview
 
-A flashcard web app with no build step, no frameworks, and no dependencies beyond Google Fonts. Card data lives in individual JS files under `cards/`. All styles are in `css/style.css`. All app logic is in `js/app.js`.
+A flashcard web app with no build step, no frameworks, and no dependencies beyond Google Fonts. Card data and progress are stored in **Google Sheets** (Phase 6). All styles are in `css/style.css`. All app logic is in `js/app.js`.
 
 ## File structure
 
 ```
 index.html                        — App shell (HTML only, no inline CSS or JS)
 css/style.css                     — All styles
-js/app.js                         — All app logic + DECKS registry
-decks/ai/ml-fundamentals.js       — Category: ML Fundamentals (part of AI deck)
-decks/ai/generative-ai.js         — Category: Generative AI (part of AI deck)
-decks/ai/metrics.js               — Category: Metrics (part of AI deck)
-decks/ai/responsible-ai.js        — Category: Responsible AI (part of AI deck)
-decks/Religion/viking-runes.js    — Category: Viking Runes (part of Religion deck)
+js/app.js                         — All app logic; fetches cards from Google Sheets
+scripts/apps-script.js            — Paste into Google Apps Script editor (API layer)
+scripts/migrate-to-sheets.js      — One-time export of old JS cards to CSV
+decks/                            — Legacy JS card files (no longer imported; kept as backup)
 old/                              — Archived previous versions (do not edit)
 ```
 
-**Folder = deck. JS file = category within that deck.**
+## Adding cards — Google Sheets (current method)
 
-## Adding a new category to an existing deck
+Cards live in the Google Sheet. To add new cards, add rows directly in the sheet.
+
+**Column order:** `deck` | `category` | `term` | `definition` | `linked_to` | `weight` | `archived` | `got_it`
+
+| Column | Example | Notes |
+|--------|---------|-------|
+| deck | `AI` | Top-level deck name (e.g. AI, Religion) |
+| category | `ML Fundamentals` | Sub-category shown in the selector |
+| term | `accuracy` | The word/concept on the card front |
+| definition | `The fraction of correct...` | Shown on flip; can use `<strong>` and `<em>` |
+| linked_to | `precision, recall, F1` | Comma-separated related terms (optional) |
+| weight | `0` | Leave as 0 for new cards |
+| archived | `FALSE` | Leave as FALSE for new cards |
+| got_it | `FALSE` | Leave as FALSE for new cards |
+
+New rows are live immediately on next page load — no code changes needed.
+
+## Card generation prompt
+
+Use this prompt to generate batches of cards to paste into the Sheet:
+
+```
+Generate flashcard rows for Google Sheets in this exact column order:
+deck, category, term, definition, linked_to, weight, archived, got_it
+
+Rules:
+- deck: the top-level deck name (e.g. "AI")
+- category: the sub-category (e.g. "ML Fundamentals")
+- definition: 1–3 sentences, concise but complete; may use <strong> or <em> for emphasis
+- linked_to: comma-separated list of related terms from the same sheet (optional; leave blank if unsure)
+- weight: always 0
+- archived: always FALSE
+- got_it: always FALSE
+- No markdown, no extra formatting — plain values only
+
+Output as tab-separated rows (one card per line, no header row).
+
+Topic: [REPLACE]
+Deck: [REPLACE]
+Category: [REPLACE]
+```
+
+Paste the output directly into the Google Sheet starting at the next empty row.
+
+## Legacy: Adding a new category to an existing deck (OLD — pre-Phase 6)
+
+This method is no longer used. Cards now come from Google Sheets.
+For historical reference only:
 
 1. Create `decks/<deck-folder>/<category-name>.js`:
    ```js
@@ -29,15 +74,12 @@ old/                              — Archived previous versions (do not edit)
    ];
    export default MY_CATEGORY;
    ```
-2. In `js/app.js`, add the import and one entry to the deck's `categories` array:
-   ```js
-   import MY_CATEGORY from '../decks/<deck-folder>/<category-name>.js';
-   // then inside the deck object in DECKS:
-   { id: 'my-category', label: 'My Category', cards: MY_CATEGORY },
-   ```
 
-## Adding a new deck
+## Legacy: Adding a new deck (OLD — pre-Phase 6)
 
+This method is no longer used.
+
+For historical reference only:
 1. Create a new subfolder under `decks/` and add at least one category JS file
 2. In `js/app.js`, add the import and a new object to `DECKS`:
    ```js

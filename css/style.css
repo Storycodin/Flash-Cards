@@ -176,6 +176,28 @@ header .deck-label {
 .cat-btn:active  { opacity: 0.75; }
 .cat-btn.active  { background: var(--accent); border-color: var(--accent); color: #ffffff; }
 
+.cat-count {
+  margin-left: 5px;
+  font-size: 9px;
+  opacity: 0.6;
+  font-weight: 400;
+}
+
+.cat-btn.cat-complete {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.cat-btn.cat-complete-anim {
+  animation: categoryDone 0.7s ease forwards;
+}
+
+@keyframes categoryDone {
+  0%   { background: transparent; color: inherit; border-color: var(--border); opacity: 1; }
+  35%  { background: #22c55e; border-color: #22c55e; color: #fff; opacity: 1; }
+  100% { background: transparent; opacity: 0.45; }
+}
+
 /* ── Progress ── */
 .progress-wrap {
   width: 100%;

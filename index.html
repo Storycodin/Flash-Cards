@@ -51,7 +51,7 @@
 
 <!-- Archive button — outside scene so click doesn't trigger flipCard -->
 <div class="archive-row">
-  <button class="btn-archive" id="btn-archive" onclick="toggleArchive()">Archive</button>
+  <button class="btn-archive" id="btn-archive" onclick="toggleArchive()">Add to Tome</button>
 </div>
 
 <!-- Judgment buttons — shown when card is flipped, outside scene to avoid triggering flip -->
@@ -85,7 +85,7 @@
 <div class="archived-section">
   <div class="archived-header">
     <button class="archived-toggle-btn" id="archived-toggle-btn" onclick="toggleShowArchived()">
-      Archived <span id="archived-count">0</span>
+      Tome of Knowledge <span id="archived-count">0</span>
     </button>
     <label class="archived-include-label">
       <input type="checkbox" id="include-archived" onchange="toggleIncludeArchived()">
