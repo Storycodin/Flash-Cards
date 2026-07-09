@@ -166,8 +166,17 @@ let cardWeights     = new Map(); // term → accumulated weight delta
 let seenThisSession = new Set();
 let recentlySeen    = [];        // last 10 terms, for connection bonus
 let addedQueue      = new Set(); // terms manually queued via addAsNext
-let viewHistory     = [];        // stack of previously viewed terms for back navigation
+let cardHistory     = [];        // ordered terms visited this session (browser-style history)
+let historyPos       = -1;       // index into cardHistory for the currently displayed card
 let judgedThisCard  = false;
+
+// Truncate any forward history past the current position, then append a new card.
+// Used whenever a genuinely new card is chosen (not a back/forward replay).
+function recordNewCard(term) {
+  cardHistory = cardHistory.slice(0, historyPos + 1);
+  cardHistory.push(term);
+  historyPos = cardHistory.length - 1;
+}
 
 const JUDGMENT_LEVELS = ['horrible', 'ok', 'gettingit', 'gotit'];
 const JUDGMENT_DELTA  = { horrible: 4, ok: 2, gettingit: 1 };
@@ -181,7 +190,6 @@ function judgeCard(level) {
 
   if (level === 'gotit') {
     addedQueue.clear(); // reset queue so Next works cleanly after auto-advance
-    viewHistory.push(term); // allow Back to return to this card if needed
     gotItTerms.add(term);
     syncCard(term, { got_it: true, weight: 0 });
     updateArchivedCount();
@@ -196,6 +204,7 @@ function judgeCard(level) {
     if (currentIndex >= activeCards.length) currentIndex = 0;
     judgedThisCard = false;
     currentIndex = weightedPickIndex();
+    recordNewCard(activeCards[currentIndex].term);
     render(1);
     return;
   }
@@ -510,7 +519,7 @@ function render(slideDir) {
 
   updateProgress();
 
-  document.getElementById('btn-prev').disabled = viewHistory.length === 0;
+  document.getElementById('btn-prev').disabled = historyPos <= 0;
   document.getElementById('btn-next').disabled =
     addedQueue.size > 0 ? currentIndex === activeCards.length - 1 : activeCards.length <= 1;
 
@@ -547,19 +556,13 @@ function flipCard() {
 
 function navigate(dir) {
   if (dir === -1) {
-    // Go back through view history, skipping any removed cards
-    while (viewHistory.length > 0) {
-      const prevTerm = viewHistory.pop();
-      const idx = activeCards.findIndex(c => c.term === prevTerm);
+    // Walk back through history, skipping any entries no longer in the active pool
+    while (historyPos > 0) {
+      historyPos--;
+      const idx = activeCards.findIndex(c => c.term === cardHistory[historyPos]);
       if (idx !== -1) { currentIndex = idx; render(-1); return; }
     }
-    return; // nothing in history
-  }
-
-  // Push current card to history before moving forward
-  if (activeCards[currentIndex]) {
-    viewHistory.push(activeCards[currentIndex].term);
-    if (viewHistory.length > 50) viewHistory.shift();
+    return; // nothing further back
   }
 
   recentlySeen.unshift(activeCards[currentIndex].term);
@@ -571,16 +574,26 @@ function navigate(dir) {
     const nextTerm = activeCards[next]?.term;
     if (nextTerm && addedQueue.has(nextTerm)) addedQueue.delete(nextTerm);
     currentIndex = next;
-  } else {
-    currentIndex = weightedPickIndex();
+    recordNewCard(activeCards[currentIndex].term);
+    render(1);
+    return;
   }
 
+  // Redo forward through history first, skipping any entries no longer in the active pool
+  while (historyPos < cardHistory.length - 1) {
+    historyPos++;
+    const idx = activeCards.findIndex(c => c.term === cardHistory[historyPos]);
+    if (idx !== -1) { currentIndex = idx; render(1); return; }
+  }
+
+  // No forward history left — pick a genuinely new card
+  currentIndex = weightedPickIndex();
+  recordNewCard(activeCards[currentIndex].term);
   render(1);
 }
 
 function shuffle() {
   addedQueue.clear();
-  viewHistory.length = 0;
   const arr = [...activeCards];
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -588,6 +601,8 @@ function shuffle() {
   }
   activeCards  = arr;
   currentIndex = 0;
+  cardHistory  = activeCards.length ? [activeCards[0].term] : [];
+  historyPos   = activeCards.length ? 0 : -1;
 
   const cardEl = document.getElementById('card');
   cardEl.classList.remove('shuffle-anim');
@@ -599,7 +614,6 @@ function shuffle() {
 
 function rebuildActiveCards(startIndex = 0) {
   addedQueue.clear();
-  viewHistory.length = 0;
   let cards = DECKS.flatMap(deck =>
     deck.categories
       .filter(cat => activeKeys.has(`${deck.id}/${cat.id}`))
@@ -610,6 +624,8 @@ function rebuildActiveCards(startIndex = 0) {
   }
   activeCards  = cards;
   currentIndex = Math.min(startIndex, Math.max(0, activeCards.length - 1));
+  cardHistory  = activeCards.length ? [activeCards[currentIndex].term] : [];
+  historyPos   = activeCards.length ? 0 : -1;
   render(0);
 }
 
